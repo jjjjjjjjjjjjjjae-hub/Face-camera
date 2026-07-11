@@ -2,13 +2,12 @@ package com.jj.fakecam;
 
 import androidx.appcompat.app.AppCompatActivity;
 import android.os.Bundle;
-import android.util.Log;
 import android.widget.TextView;
 import android.view.Gravity;
 import com.jj.fakecam.hook.RuntimeInterfaceInterceptor;
 
 public class MainActivity extends AppCompatActivity {
-    private static final String TAG = "FaceCam_Main";
+    private TextView logTextView;
 
     public interface CameraServiceMock {
         String acquireLatestImageFrame();
@@ -17,13 +16,29 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        Log.d(TAG, "MainActivity сәтті іске қосылды.");
 
-        TextView tv = new TextView(this);
-        tv.setText("FaceCam 10/10 Архитектурасы\n\nРесурстар мен Навигация толық түзетілді.\nЖұмыс нәтижесін Logcat (Log.d) арқылы көріңіз.");
-        tv.setGravity(Gravity.CENTER);
-        tv.setTextSize(16);
-        setContentView(tv);
+        // Экранда логтарды көрсететін визуалды элемент
+        logTextView = new TextView(this);
+        logTextView.setText("=== FaceCam Экрандық Лог Жүйесі ===\n\n");
+        logTextView.setGravity(Gravity.TOP | Gravity.LEFT);
+        logTextView.setTextSize(14);
+        logTextView.setPadding(40, 40, 40, 40);
+        setContentView(logTextView);
+
+        // Интерцептор логтарын тікелей экранға бағыттаймыз
+        RuntimeInterfaceInterceptor.setLogListener(new RuntimeInterfaceInterceptor.LogListener() {
+            @Override
+            public void onLogReceived(final String message) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        logTextView.append(message + "\n");
+                    }
+                });
+            }
+        });
+
+        RuntimeInterfaceInterceptor.logToUI("[ЖҮЙЕ]: Қолданба іске қосылды.");
 
         CameraServiceMock realService = new CameraServiceMock() {
             @Override
@@ -33,11 +48,14 @@ public class MainActivity extends AppCompatActivity {
         };
 
         try {
+            // Прокси құру сәті
             CameraServiceMock proxyService = RuntimeInterfaceInterceptor.createProxy(realService, CameraServiceMock.class);
+            
+            // Әдісті шақыру (Хук автоматты түрде экранда көрінеді)
             String frameData = proxyService.acquireLatestImageFrame();
-            Log.d(TAG, "Прокси арқылы өткен мән: " + frameData);
+            RuntimeInterfaceInterceptor.logToUI("[ЖҮЙЕ ДЕРЕГІ]: " + frameData);
         } catch (Exception e) {
-            Log.e(TAG, "Интерцептор қатесі: ", e);
+            RuntimeInterfaceInterceptor.logToUI("[ҚАТЕ]: " + e.getMessage());
         }
     }
 }
