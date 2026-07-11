@@ -1,61 +1,81 @@
 package com.jj.fakecam;
 
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 import androidx.appcompat.app.AppCompatActivity;
+import android.net.Uri;
 import android.os.Bundle;
+import android.widget.Button;
+import android.widget.LinearLayout;
 import android.widget.TextView;
-import android.view.Gravity;
-import com.jj.fakecam.hook.RuntimeInterfaceInterceptor;
+import android.widget.Toast;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 
 public class MainActivity extends AppCompatActivity {
-    private TextView logTextView;
+    private TextView statusTextView;
 
-    public interface CameraServiceMock {
-        String acquireLatestImageFrame();
-    }
+    // Кәсіби ActivityResultLauncher - ескірген onActivityResult орнына
+    private final ActivityResultLauncher<String> pickImageLauncher = registerForActivityResult(
+            new ActivityResultContracts.GetContent(),
+            uri -> {
+                if (uri != null) {
+                    copyImageToInternalStorage(uri);
+                }
+            }
+    );
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        // Экранда логтарды көрсететін визуалды элемент
-        logTextView = new TextView(this);
-        logTextView.setText("=== FaceCam Экрандық Лог Жүйесі ===\n\n");
-        logTextView.setGravity(Gravity.TOP | Gravity.LEFT);
-        logTextView.setTextSize(14);
-        logTextView.setPadding(40, 40, 40, 40);
-        setContentView(logTextView);
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(40, 40, 40, 40);
 
-        // Интерцептор логтарын тікелей экранға бағыттаймыз
-        RuntimeInterfaceInterceptor.setLogListener(new RuntimeInterfaceInterceptor.LogListener() {
-            @Override
-            public void onLogReceived(final String message) {
-                runOnUiThread(new Runnable() {
-                    @Override
-                    public void run() {
-                        logTextView.append(message + "\n");
-                    }
-                });
-            }
-        });
+        Button pickButton = new Button(this);
+        pickButton.setText("Галереядан сурет таңдау (Старт)");
 
-        RuntimeInterfaceInterceptor.logToUI("[ЖҮЙЕ]: Қолданба іске қосылды.");
+        statusTextView = new TextView(this);
+        statusTextView.setText("Күйі: Сурет дайын емес. Батырманы басыңыз.");
+        statusTextView.setTextSize(14);
+        statusTextView.setPadding(0, 40, 0, 0);
 
-        CameraServiceMock realService = new CameraServiceMock() {
-            @Override
-            public String acquireLatestImageFrame() {
-                return "Нағыз камера пиксельдері (Аппараттық дерек)";
-            }
-        };
+        layout.addView(pickButton);
+        layout.addView(statusTextView);
+        setContentView(layout);
 
+        updateStatus();
+
+        // Жаңа API арқылы галереяны іске қосу
+        pickButton.setOnClickListener(v -> pickImageLauncher.launch("image/*"));
+    }
+
+    private void updateStatus() {
+        File fakeFile = new File(getFilesDir(), "fake_camera_source.jpg");
+        if (fakeFile.exists()) {
+            statusTextView.setText("Күйі: СТАРТ БЕРІЛДІ!\nСурет ішкі қауіпсіз жадта тұр.\nЕнді басқа қолданбадан камера ашқанда осы қолданбаны таңдаңыз.");
+        }
+    }
+
+    private void copyImageToInternalStorage(Uri imageUri) {
         try {
-            // Прокси құру сәті
-            CameraServiceMock proxyService = RuntimeInterfaceInterceptor.createProxy(realService, CameraServiceMock.class);
-            
-            // Әдісті шақыру (Хук автоматты түрде экранда көрінеді)
-            String frameData = proxyService.acquireLatestImageFrame();
-            RuntimeInterfaceInterceptor.logToUI("[ЖҮЙЕ ДЕРЕГІ]: " + frameData);
+            File localFile = new File(getFilesDir(), "fake_camera_source.jpg");
+            try (InputStream is = getContentResolver().openInputStream(imageUri);
+                 OutputStream os = new FileOutputStream(localFile)) {
+                if (is == null) return;
+                byte[] buffer = new byte[4096];
+                int bytesRead;
+                while ((bytesRead = is.read(buffer)) != -1) {
+                    os.write(buffer, 0, bytesRead);
+                }
+            }
+            updateStatus();
+            Toast.makeText(this, "Сурет сәтті бекітілді!", Toast.LENGTH_LONG).show();
         } catch (Exception e) {
-            RuntimeInterfaceInterceptor.logToUI("[ҚАТЕ]: " + e.getMessage());
+            statusTextView.setText("Қате: " + e.getMessage());
         }
     }
 }
