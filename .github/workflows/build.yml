@@ -1,0 +1,29 @@
+name: Android Architecture Build
+
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+
+    - name: Make gradlew executable
+      run: chmod +x gradlew
+
+    - name: Build Android Project with committed wrapper
+      run: ./gradlew assembleDebug --no-daemon
+
+    - name: Upload Built APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: facecam-blueprint-apk
+        path: app/build/outputs/apk/debug/app-debug.apk
